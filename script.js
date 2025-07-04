@@ -113,6 +113,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Render a poll in the feed
     function renderPoll(pollId, question, options, votes) {
+        // Remove any existing poll with the same ID before rendering
+        const oldPoll = feed.querySelector('[data-poll-id="' + pollId + '"]');
+        if (oldPoll) oldPoll.remove();
+
         const pollElement = document.createElement('div');
         pollElement.className = 'poll';
         pollElement.dataset.pollId = pollId;
