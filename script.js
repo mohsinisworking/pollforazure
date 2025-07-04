@@ -66,10 +66,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         questionInput.value = '';
-        pollOptionsInputs.innerHTML = `
-            <input type="text" class="poll-option-input" placeholder="Option 1" required>
-            <input type="text" class="poll-option-input" placeholder="Option 2" required>
-        `;
+        // Only reset the values of the existing inputs, don't recreate them
+        const pollInputs = pollOptionsInputs.querySelectorAll('.poll-option-input');
+        pollInputs.forEach((input, idx) => {
+            input.value = '';
+            input.placeholder = `Option ${idx + 1}`;
+        });
+        // Remove any extra option inputs beyond the first two
+        while (pollOptionsInputs.children.length > 2) {
+            pollOptionsInputs.removeChild(pollOptionsInputs.lastChild);
+        }
         modal.style.display = 'none';
     });
 
