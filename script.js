@@ -125,6 +125,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const optionsElement = document.createElement('ul');
         optionsElement.className = 'poll-options';
 
+        // Show vote percentages if votes are available
+        let totalVotes = 0;
+        if (votes && Array.isArray(votes)) {
+            totalVotes = votes.reduce((a, b) => a + b, 0);
+        }
+
         options.forEach(function(option, index) {
             const optionElement = document.createElement('li');
             optionElement.className = 'poll-option';
@@ -135,8 +141,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 optionElement.classList.add('voted');
             }
 
+            // Show percentage if votes available
+            if (votes && typeof votes[index] === 'number') {
+                const percent = totalVotes > 0 ? Math.round((votes[index] / totalVotes) * 100) : 0;
+                const percentSpan = document.createElement('span');
+                percentSpan.textContent = percent + '%';
+                percentSpan.style.marginLeft = '10px';
+                percentSpan.style.color = '#2563eb';
+                optionElement.appendChild(percentSpan);
+            }
+
+            // Smooth highlight on click
             optionElement.addEventListener('click', function() {
-                vote(pollId, index);
+                // Optimistically update UI
+                const prevVote = getUserVote(pollId);
+                if (prevVote == index) return;
+                setUserVote(pollId, index);
+                // Remove voted class from all options
+                const allOptions = optionsElement.querySelectorAll('.poll-option');
+                allOptions.forEach(opt => opt.classList.remove('voted'));
+                optionElement.classList.add('voted');
+                // Optionally show a quick animation
+                optionElement.style.transition = 'background 0.3s, border-color 0.3s';
+                optionElement.style.background = '#dbeafe';
+                optionElement.style.borderColor = '#2563eb';
+                // Send vote to backend, then update just this poll
+                vote(pollId, index, pollElement);
             });
             optionsElement.appendChild(optionElement);
         });
@@ -146,10 +176,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Vote for an option (one vote per person, can change vote)
-    async function vote(pollId, optionIndex) {
-        const prevVote = getUserVote(pollId);
-        if (prevVote == optionIndex) return; // Already voted for this option
-
+    async function vote(pollId, optionIndex, pollElement) {
+        // Optimistically update localStorage and UI already done
         try {
             const res = await fetch(BASE_URL + '/votePoll', {
                 method: 'POST',
@@ -158,8 +186,12 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             if (!res.ok) throw new Error("Vote failed");
-            setUserVote(pollId, optionIndex); // Save new vote
-            await loadPolls();
+            // Only update this poll's results
+            const pollRes = await fetch(BASE_URL + '/getPoll?poll_id=' + encodeURIComponent(pollId));
+            const fullPoll = await pollRes.json();
+            // Remove old pollElement and rerender just this poll
+            pollElement.remove();
+            renderPoll(pollId, fullPoll.question, fullPoll.options, fullPoll.votes);
         } catch (err) {
             console.error("Vote error:", err);
         }
