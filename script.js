@@ -1,206 +1,229 @@
+// ==== CONFIG & HELPERS ====
+
+// Your Azure Function base URL:
 const BASE_URL = "https://mohsin-pollz-function-ebf4fad7ame7hhcj.northeurope-01.azurewebsites.net/api";
 
-// Helper functions for storing user's vote in localStorage
+// LocalStorage keys use a consistent prefix:
+const STORAGE_PREFIX = "poll_vote_";
+
+// Get stored vote index (or null)
 function getUserVote(pollId) {
-    return localStorage.getItem("poll_vote_" + pollId);
+  return localStorage.getItem(STORAGE_PREFIX + pollId);
 }
+// Store vote index
 function setUserVote(pollId, optionIndex) {
-    localStorage.setItem("poll_vote_" + pollId, optionIndex);
+  localStorage.setItem(STORAGE_PREFIX + pollId, optionIndex);
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Get references to elements
-    const createPollBtn = document.getElementById('create-poll-fab');
-    const modal = document.getElementById('create-poll-modal');
-    const closeModalBtn = document.getElementById('close-modal-btn');
-    const addOptionBtn = document.getElementById('add-option-btn');
-    const pollOptionsInputs = document.getElementById('poll-options-inputs');
-    const createPollForm = document.getElementById('create-poll-form');
-    const feed = document.getElementById('feed');
+// ==== DOM REFERENCES ====
+const feed             = document.getElementById('feed');
+const fab              = document.getElementById('create-poll-fab');
+const modal            = document.getElementById('create-poll-modal');
+const closeModalBtn    = document.getElementById('close-modal-btn');
+const addOptionBtn     = document.getElementById('add-option-btn');
+const optionsWrapper   = document.getElementById('poll-options-inputs');
+const form             = document.getElementById('create-poll-form');
+const questionInput    = document.getElementById('poll-question');
 
-    // Show modal when create poll button is clicked
-    createPollBtn.addEventListener('click', function() {
-        modal.style.display = 'flex';
-        document.getElementById('poll-question').focus();
-    });
+// ==== SAMPLE POLLS (pre‑seeded) ====
+const samplePolls = [
+  {
+    poll_id: "sample1",
+    question: "Best Economic Plan?",
+    options: ["Capitalism", "Communism", "Socialism"],
+    votes:    [0, 0, 0]
+  },
+  {
+    poll_id: "sample2",
+    question: "Best Season?",
+    options: ["Spring", "Summer", "Autumn", "Winter"],
+    votes:    [0, 0, 0, 0]
+  },
+  {
+    poll_id: "sample3",
+    question: "Should Pakistan adopt Secularism?",
+    options: ["YES!", "NO!"],
+    votes:    [0, 0]
+  }
+];
 
-    // Hide modal when close button is clicked
-    closeModalBtn.addEventListener('click', function() {
-        modal.style.display = 'none';
-    });
+// ==== EVENT BINDINGS ====
+document.addEventListener('DOMContentLoaded', () => {
+  // 1) show samples immediately
+  samplePolls.forEach(p => renderPoll(p));
 
-    // Hide modal when clicking outside the form
-    modal.addEventListener('click', function(event) {
-        if (event.target === modal) {
-            modal.style.display = 'none';
-        }
-    });
+  // 2) then load any real polls from backend
+  loadPolls();
 
-    // Add a new option input (up to 6)
-    addOptionBtn.addEventListener('click', function() {
-        const optionInputs = pollOptionsInputs.querySelectorAll('.poll-option-input');
-        if (optionInputs.length < 6) {
-            const newOption = document.createElement('input');
-            newOption.type = 'text';
-            newOption.className = 'poll-option-input';
-            newOption.placeholder = 'Option ' + (optionInputs.length + 1);
-            newOption.required = true;
-            pollOptionsInputs.appendChild(newOption);
-            newOption.focus();
-        }
-    });
+  // 3) FAB — open modal
+  fab.addEventListener('click', () => {
+    modal.classList.remove('hidden');
+    questionInput.focus();
+  });
 
-    // Handle poll creation
-    createPollForm.addEventListener('submit', async function(event) {
-        event.preventDefault();
-        const questionInput = document.getElementById('poll-question');
-        const optionInputs = pollOptionsInputs.querySelectorAll('.poll-option-input');
-        const options = Array.from(optionInputs).map(input => input.value.trim()).filter(Boolean);
+  // 4) close modal in any of three ways
+  closeModalBtn.addEventListener('click', () => modal.classList.add('hidden'));
+  modal.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden'); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') modal.classList.add('hidden'); });
 
-        if (options.length < 2) {
-            alert('Please provide at least two options.');
-            return;
-        }
+  // 5) add extra option (up to 6)
+  addOptionBtn.addEventListener('click', () => {
+    const inputs = optionsWrapper.querySelectorAll('.poll-option-input');
+    if (inputs.length >= 6) {
+      alert('Maximum of 6 options allowed.');
+      return;
+    }
+    const idx = inputs.length + 1;
+    const inp = document.createElement('input');
+    inp.name = 'option';
+    inp.type = 'text';
+    inp.required = true;
+    inp.placeholder = `Option ${idx}`;
+    inp.className = 'poll-option-input';
+    optionsWrapper.appendChild(inp);
+    inp.focus();
+  });
 
-        const newPoll = {
-            poll_id: Date.now().toString(),
-            question: questionInput.value.trim(),
-            options: options
-        };
+  // 6) handle form submission
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
 
-        try {
-            const res = await fetch(BASE_URL + '/createPoll', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newPoll)
-            });
+    // collect question + options
+    const question = questionInput.value.trim();
+    const options  = Array.from(optionsWrapper.querySelectorAll('input'))
+                          .map(i => i.value.trim())
+                          .filter(v => v !== '');
 
-            if (!res.ok) throw new Error("Create failed");
-            await loadPolls();
-        } catch (err) {
-            console.error("Create error", err);
-        }
-
-        // Reset form
-        questionInput.value = '';
-        optionInputs.forEach((input, idx) => {
-            input.value = '';
-            input.placeholder = 'Option ' + (idx + 1);
-        });
-        // Remove extra option inputs beyond the first two
-        while (pollOptionsInputs.children.length > 2) {
-            pollOptionsInputs.removeChild(pollOptionsInputs.lastChild);
-        }
-        modal.style.display = 'none';
-    });
-
-    // Load and display all polls
-    async function loadPolls() {
-        try {
-            const res = await fetch(BASE_URL + '/getAllPolls');
-            const pollList = await res.json();
-            feed.innerHTML = '';
-            for (const poll of pollList) {
-                const pollRes = await fetch(BASE_URL + '/getPoll?poll_id=' + encodeURIComponent(poll.poll_id));
-                const fullPoll = await pollRes.json();
-                renderPoll(poll.poll_id, fullPoll.question, fullPoll.options, fullPoll.votes);
-            }
-        } catch (err) {
-            console.error("Error loading polls:", err);
-            feed.innerHTML = '<p>Error loading polls.</p>';
-        }
+    // enforce at least 2 options
+    if (options.length < 2) {
+      alert('Please enter at least 2 options.');
+      return;
     }
 
-    // Render a poll in the feed
-    function renderPoll(pollId, question, options, votes) {
-        // Remove any existing poll with the same ID before rendering
-        const oldPoll = feed.querySelector('[data-poll-id="' + pollId + '"]');
-        if (oldPoll) oldPoll.remove();
+    // build payload
+    const newPoll = {
+      poll_id : Date.now().toString(),
+      question,
+      options
+    };
 
-        const pollElement = document.createElement('div');
-        pollElement.className = 'poll';
-        pollElement.dataset.pollId = pollId;
+    try {
+      // send to backend
+      const res = await fetch(`${BASE_URL}/createPoll`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(newPoll)
+      });
+      if (!res.ok) throw new Error('Create failed');
+      const created = await res.json();
 
-        const questionElement = document.createElement('div');
-        questionElement.className = 'poll-header';
-        questionElement.textContent = question;
-        pollElement.appendChild(questionElement);
-
-        const optionsElement = document.createElement('ul');
-        optionsElement.className = 'poll-options';
-
-        // Show vote percentages if votes are available
-        let totalVotes = 0;
-        if (votes && Array.isArray(votes)) {
-            totalVotes = votes.reduce((a, b) => a + b, 0);
-        }
-
-        options.forEach(function(option, index) {
-            const optionElement = document.createElement('li');
-            optionElement.className = 'poll-option';
-            optionElement.textContent = option;
-
-            // Highlight user's vote
-            if (getUserVote(pollId) == index) {
-                optionElement.classList.add('voted');
-            }
-
-            // Show percentage if votes available
-            if (votes && typeof votes[index] === 'number') {
-                const percent = totalVotes > 0 ? Math.round((votes[index] / totalVotes) * 100) : 0;
-                const percentSpan = document.createElement('span');
-                percentSpan.textContent = percent + '%';
-                percentSpan.style.marginLeft = '10px';
-                percentSpan.style.color = '#2563eb';
-                optionElement.appendChild(percentSpan);
-            }
-
-            // Smooth highlight on click
-            optionElement.addEventListener('click', function() {
-                // Optimistically update UI
-                const prevVote = getUserVote(pollId);
-                if (prevVote == index) return;
-                setUserVote(pollId, index);
-                // Remove voted class from all options
-                const allOptions = optionsElement.querySelectorAll('.poll-option');
-                allOptions.forEach(opt => opt.classList.remove('voted'));
-                optionElement.classList.add('voted');
-                // Optionally show a quick animation
-                optionElement.style.transition = 'background 0.3s, border-color 0.3s';
-                optionElement.style.background = '#dbeafe';
-                optionElement.style.borderColor = '#2563eb';
-                // Send vote to backend, then update just this poll
-                vote(pollId, index, pollElement);
-            });
-            optionsElement.appendChild(optionElement);
-        });
-
-        pollElement.appendChild(optionsElement);
-        feed.appendChild(pollElement);
+      // render it immediately
+      renderPoll({ ...newPoll, votes: options.map(_=>0) });
+    } catch(err) {
+      console.error(err);
+      alert('Could not create poll. See console.');
     }
 
-    // Vote for an option (one vote per person, can change vote)
-    async function vote(pollId, optionIndex, pollElement) {
-        // Optimistically update localStorage and UI already done
-        try {
-            const res = await fetch(BASE_URL + '/votePoll', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ poll_id: pollId, option_index: optionIndex })
-            });
-
-            if (!res.ok) throw new Error("Vote failed");
-            // Only update this poll's results
-            const pollRes = await fetch(BASE_URL + '/getPoll?poll_id=' + encodeURIComponent(pollId));
-            const fullPoll = await pollRes.json();
-            // Remove old pollElement and rerender just this poll
-            pollElement.remove();
-            renderPoll(pollId, fullPoll.question, fullPoll.options, fullPoll.votes);
-        } catch (err) {
-            console.error("Vote error:", err);
-        }
+    // reset form
+    form.reset();
+    // remove extra inputs beyond the first two
+    while (optionsWrapper.children.length > 2) {
+      optionsWrapper.removeChild(optionsWrapper.lastChild);
     }
-
-    // Load polls on page load
-    loadPolls();
+    modal.classList.add('hidden');
+  });
 });
+
+// ==== DATA FETCH & RENDERING ====
+
+async function loadPolls() {
+  try {
+    const res      = await fetch(`${BASE_URL}/getAllPolls`);
+    const pollsArr = await res.json();      // expect [{poll_id, question, options, votes}, ...]
+    pollsArr.forEach(renderPoll);
+  } catch(err) {
+    console.error('Error loading polls:', err);
+    feed.insertAdjacentHTML('beforeend', '<p class="error">Could not load polls.</p>');
+  }
+}
+
+function renderPoll(poll) {
+  // if passed separate args, normalize:
+  if (!poll.question) {
+    const [poll_id, question, options, votes] = arguments;
+    poll = { poll_id, question, options, votes };
+  }
+
+  // remove existing DOM node if re‑rendering
+  const existing = feed.querySelector(`[data-poll-id="${poll.poll_id}"]`);
+  if (existing) existing.remove();
+
+  // build the card
+  const card = document.createElement('div');
+  card.className     = 'poll';
+  card.dataset.pollId = poll.poll_id;
+
+  // header
+  const hdr = document.createElement('div');
+  hdr.className   = 'poll-header';
+  hdr.textContent = poll.question;
+  card.appendChild(hdr);
+
+  // options list
+  const ul = document.createElement('ul');
+  ul.className = 'poll-options';
+
+  // total votes (for percentages)
+  const totalVotes = Array.isArray(poll.votes)
+    ? poll.votes.reduce((a,b)=>a+b, 0)
+    : 0;
+
+  poll.options.forEach((opt, idx) => {
+    const li = document.createElement('li');
+    li.className   = 'poll-option';
+    li.textContent = opt;
+
+    // if user has voted here, highlight
+    if (getUserVote(poll.poll_id) == idx) {
+      li.classList.add('voted');
+    }
+
+    // show percentage
+    if (totalVotes > 0) {
+      const pct = Math.round((poll.votes[idx] || 0) / totalVotes * 100);
+      const span = document.createElement('span');
+      span.textContent = `${pct}%`;
+      li.appendChild(span);
+    }
+
+    // clicking casts vote
+    li.addEventListener('click', () => {
+      const prev = getUserVote(poll.poll_id);
+      if (prev == idx) return;         // no change
+
+      setUserVote(poll.poll_id, idx);
+      voteOnPoll(poll.poll_id, idx, card);
+    });
+
+    ul.appendChild(li);
+  });
+
+  card.appendChild(ul);
+  feed.appendChild(card);
+}
+
+async function voteOnPoll(pollId, optionIndex, cardEl) {
+  try {
+    await fetch(`${BASE_URL}/votePoll`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ poll_id: pollId, option_index: optionIndex })
+    });
+    // re‑fetch just this poll’s newest data
+    const res  = await fetch(`${BASE_URL}/getPoll?poll_id=${encodeURIComponent(pollId)}`);
+    const data = await res.json();
+    renderPoll(data);
+  } catch(err) {
+    console.error('Vote error:', err);
+  }
+}
