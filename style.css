@@ -83,18 +83,36 @@ header h1 {
   justify-content: space-between;
   cursor: pointer;
   border: none;
-  transition: background 0.18s, color 0.18s;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+.poll-option:hover {
+  background: #d1e7ff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+}
+.poll-option:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.1);
 }
 .poll-option.voted {
   background: var(--primary-blue-accent);
   color: var(--primary-blue-dark);
   font-weight: 700;
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
 }
 .poll-option span {
   font-size: 1em;
   font-weight: 600;
   color: var(--primary-blue-dark);
   margin-left: 18px;
+  transition: all 0.2s ease;
+}
+.poll-option.voted span {
+  color: var(--primary-blue-dark);
+  font-weight: 800;
 }
 .fab {
   position: fixed;
@@ -113,11 +131,15 @@ header h1 {
   font-size: 2.2em;
   cursor: pointer;
   z-index: 20;
-  transition: background 0.18s, box-shadow 0.18s;
+  transition: all 0.2s ease;
 }
 .fab:hover {
   background: var(--primary-blue-dark);
   box-shadow: 0 4px 16px rgba(37, 99, 235, 0.13);
+  transform: scale(1.05);
+}
+.fab:active {
+  transform: scale(0.95);
 }
 .modal-overlay {
   position: fixed;
@@ -127,6 +149,7 @@ header h1 {
   align-items: center;
   justify-content: center;
   z-index: 100;
+  backdrop-filter: blur(2px);
 }
 .modal-content {
   background: #fff;
@@ -139,6 +162,17 @@ header h1 {
   flex-direction: column;
   align-items: center;
   position: relative;
+  animation: modalSlideIn 0.3s ease;
+}
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 .modal-header {
   width: 100%;
@@ -161,6 +195,10 @@ header h1 {
   color: var(--primary-blue);
   cursor: pointer;
   margin-left: 8px;
+  transition: color 0.2s ease;
+}
+.close-btn:hover {
+  color: var(--primary-blue-dark);
 }
 .form-group {
   width: 100%;
@@ -182,11 +220,12 @@ header h1 {
   border-radius: 8px;
   font-size: 1em;
   background: var(--primary-blue-bg);
-  transition: border 0.2s;
+  transition: all 0.2s ease;
 }
 #poll-question:focus, .poll-option-input:focus {
   border: 1.5px solid var(--primary-blue);
   outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 #add-option-btn {
   display: block;
@@ -198,10 +237,14 @@ header h1 {
   padding: 0.6em 1.2em;
   font-size: 1em;
   cursor: pointer;
-  transition: background 0.18s;
+  transition: all 0.2s ease;
 }
 #add-option-btn:hover {
   background: var(--primary-blue-dark);
+  transform: translateY(-1px);
+}
+#add-option-btn:active {
+  transform: translateY(0);
 }
 .form-actions {
   width: 100%;
@@ -218,14 +261,33 @@ header h1 {
   padding: 0.7em 2em;
   font-size: 1.1em;
   cursor: pointer;
-  transition: background 0.18s;
+  transition: all 0.2s ease;
   min-width: 120px;
 }
 .submit-btn:hover {
   background: var(--primary-blue-dark);
+  transform: translateY(-1px);
+}
+.submit-btn:active {
+  transform: translateY(0);
 }
 .hidden {
   display: none !important;
+}
+.loading {
+  text-align: center;
+  padding: 2em;
+  color: var(--primary-blue-dark);
+  font-weight: 500;
+}
+.error {
+  text-align: center;
+  padding: 2em;
+  color: #dc2626;
+  background: #fef2f2;
+  border-radius: var(--border-radius);
+  margin: 1em;
+  border: 1px solid #fecaca;
 }
 @media (max-width: 600px) {
   .scrollable-feed {

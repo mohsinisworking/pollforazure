@@ -1,7 +1,9 @@
 // PollZ: Beginner-Friendly Poll App (with Azure Functions backend)
 
 // Use your Azure Functions App URL (no trailing slash)
-const API_BASE = "https://mohsin-pollz-function-ebf4fad7ame7hhcj.northeurope-01.azurewebsites.net/api";
+const API_BASE = window.location.hostname === 'localhost' 
+  ? "http://localhost:7071/api"
+  : "https://mohsin-pollz-function-ebf4fad7ame7hhcj.northeurope-01.azurewebsites.net/api";
 
 // --- Get references to HTML elements ---
 const feed = document.getElementById('feed');
@@ -24,8 +26,13 @@ function setUserVote(pollId, optionIndex) {
 
 // --- Show all polls in the feed ---
 async function showAllPolls() {
-  feed.innerHTML = "";
+  feed.innerHTML = '<div class="loading">Loading polls...</div>';
   const polls = await fetchPolls();
+  feed.innerHTML = "";
+  
+  // Sort polls by creation time (newest first)
+  polls.sort((a, b) => parseInt(b.poll_id) - parseInt(a.poll_id));
+  
   for (let i = 0; i < polls.length; i++) {
     showOnePoll(polls[i]);
   }
@@ -33,8 +40,15 @@ async function showAllPolls() {
 
 // --- Fetch all polls from backend ---
 async function fetchPolls() {
-  const res = await fetch(API_BASE + "/getAllPolls");
-  return await res.json();
+  try {
+    const res = await fetch(API_BASE + "/getAllPolls");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (error) {
+    console.error('Failed to fetch polls:', error);
+    feed.innerHTML = '<div class="error">Failed to load polls. Please try again.</div>';
+    return [];
+  }
 }
 
 // --- Show one poll card ---
@@ -71,7 +85,7 @@ function showOnePoll(poll) {
     }
     if (userVote === null) {
       li.addEventListener('click', function() {
-        voteForOption(poll.poll_id, i);
+        voteForOption(poll.poll_id, i, li, poll);
       });
     } else {
       li.style.cursor = 'default';
@@ -83,15 +97,84 @@ function showOnePoll(poll) {
   feed.appendChild(card);
 }
 
-// --- When a user votes for an option ---
-async function voteForOption(pollId, optionIndex) {
-  setUserVote(pollId, optionIndex);
-  await fetch(API_BASE + "/votePoll", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ poll_id: pollId, option_index: optionIndex })
+// --- When a user votes for an option (FIXED: No more reload) ---
+async function voteForOption(pollId, optionIndex, clickedElement, pollData) {
+  try {
+    // Optimistic update - show vote immediately
+    setUserVote(pollId, optionIndex);
+    
+    // Update the clicked option immediately
+    clickedElement.classList.add('voted');
+    clickedElement.title = 'You voted for this option.';
+    
+    // Disable all options in this poll
+    const pollCard = clickedElement.closest('.poll');
+    const allOptions = pollCard.querySelectorAll('.poll-option');
+    allOptions.forEach(option => {
+      option.style.cursor = 'default';
+      if (!option.classList.contains('voted')) {
+        option.style.opacity = '0.6';
+      }
+    });
+    
+    // Update vote count optimistically
+    pollData.votes[optionIndex]++;
+    updatePollPercentages(pollCard, pollData);
+    
+    // Send vote to backend
+    const response = await fetch(API_BASE + "/votePoll", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ poll_id: pollId, option_index: optionIndex })
+    });
+    
+    if (!response.ok) throw new Error('Vote failed');
+    
+    // Get updated data from server and update percentages
+    const updatedPoll = await response.json();
+    updatePollPercentages(pollCard, updatedPoll);
+    
+  } catch (error) {
+    console.error('Vote failed:', error);
+    // Remove the vote from localStorage if it failed
+    localStorage.removeItem(VOTE_KEY_PREFIX + pollId);
+    
+    // Revert optimistic update
+    clickedElement.classList.remove('voted');
+    clickedElement.title = '';
+    
+    // Re-enable voting
+    const pollCard = clickedElement.closest('.poll');
+    const allOptions = pollCard.querySelectorAll('.poll-option');
+    allOptions.forEach(option => {
+      option.style.cursor = 'pointer';
+      option.style.opacity = '1';
+    });
+    
+    alert('Failed to submit vote. Please try again.');
+  }
+}
+
+// --- Update poll percentages without rebuilding ---
+function updatePollPercentages(pollCard, pollData) {
+  const totalVotes = pollData.votes.reduce((a, b) => a + b, 0);
+  const options = pollCard.querySelectorAll('.poll-option');
+  
+  options.forEach((option, index) => {
+    // Remove existing percentage
+    const existingSpan = option.querySelector('span');
+    if (existingSpan) {
+      existingSpan.remove();
+    }
+    
+    // Add new percentage
+    if (totalVotes > 0) {
+      const pct = Math.round((pollData.votes[index] || 0) / totalVotes * 100);
+      const span = document.createElement('span');
+      span.textContent = pct + "%";
+      option.appendChild(span);
+    }
   });
-  showAllPolls();
 }
 
 // --- Modal and Poll Creation ---
@@ -141,16 +224,26 @@ document.addEventListener('DOMContentLoaded', function() {
       alert('Please enter at least 2 options.');
       return;
     }
-    await fetch(API_BASE + "/createPoll", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: question, options: options })
-    });
-    showAllPolls();
-    form.reset();
-    while (optionsWrapper.children.length > 2) {
-      optionsWrapper.removeChild(optionsWrapper.lastChild);
+    
+    try {
+      const response = await fetch(API_BASE + "/createPoll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: question, options: options })
+      });
+      
+      if (!response.ok) throw new Error('Failed to create poll');
+      
+      // Refresh to show new poll at the top
+      showAllPolls();
+      form.reset();
+      while (optionsWrapper.children.length > 2) {
+        optionsWrapper.removeChild(optionsWrapper.lastChild);
+      }
+      modal.classList.add('hidden');
+    } catch (error) {
+      console.error('Failed to create poll:', error);
+      alert('Failed to create poll. Please try again.');
     }
-    modal.classList.add('hidden');
   });
 });
