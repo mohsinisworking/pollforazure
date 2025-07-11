@@ -21,6 +21,24 @@ function setUserVote(pollId, optionIndex) {
   localStorage.setItem(VOTE_KEY_PREFIX + pollId, optionIndex);
 }
 
+// SignalR real-time updates
+let connection;
+async function startSignalR() {
+  const res = await fetch(API_BASE + "/negotiate", { method: "POST" });
+  const info = await res.json();
+  connection = new signalR.HubConnectionBuilder()
+    .withUrl(info.url, { accessTokenFactory: () => info.accessToken })
+    .build();
+  connection.on("pollsUpdated", (polls) => {
+    feed.innerHTML = "";
+    polls.reverse();
+    for (let i = 0; i < polls.length; i++) {
+      showOnePoll(polls[i]);
+    }
+  });
+  await connection.start();
+}
+
 async function showAllPolls() {
   feed.innerHTML = '<div class="loading">Loading polls...</div>';
   let polls = [];
@@ -32,7 +50,7 @@ async function showAllPolls() {
     return;
   }
   feed.innerHTML = "";
-  polls.reverse();
+  polls.reverse(); // Show newest first
   for (let i = 0; i < polls.length; i++) {
     showOnePoll(polls[i]);
   }
@@ -94,12 +112,13 @@ async function voteForOption(pollId, optionIndex) {
     localStorage.removeItem(VOTE_KEY_PREFIX + pollId);
     alert('Failed to vote.');
   }
-  showAllPolls();
+  // No need to call showAllPolls(); SignalR will update
 }
 
 document.addEventListener('DOMContentLoaded', function() {
   modal.classList.add('hidden');
   showAllPolls();
+  startSignalR();
 
   fab.addEventListener('click', function() {
     modal.classList.remove('hidden');
@@ -152,7 +171,7 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (e) {
       alert('Failed to create poll.');
     }
-    showAllPolls();
+    // No need to call showAllPolls(); SignalR will update
     form.reset();
     while (optionsWrapper.children.length > 2) {
       optionsWrapper.removeChild(optionsWrapper.lastChild);
