@@ -32,6 +32,7 @@ async function showAllPolls() {
     return;
   }
   feed.innerHTML = "";
+  polls.reverse();
   for (let i = 0; i < polls.length; i++) {
     showOnePoll(polls[i]);
   }
