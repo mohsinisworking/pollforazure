@@ -3,53 +3,40 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>POLLZ</title>
+  <title>PollZ</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header>
     <h1>PollZ</h1>
   </header>
-
   <main>
-    <!-- Container where all polls will be rendered -->
-    <div id="feed"></div>
-
-    <!-- Floating Action Button: opens the “Create Poll” modal -->
+    <div id="feed" class="scrollable-feed"></div>
     <button id="create-poll-fab" class="fab" aria-label="Create Poll">+</button>
   </main>
-
-  <!-- Modal overlay, hidden by default -->
   <div id="create-poll-modal" class="modal-overlay hidden">
     <form id="create-poll-form" class="modal-content">
       <div class="modal-header">
         <h2>Create Poll</h2>
-        <!-- Close button in top-right -->
         <button type="button" id="close-modal-btn" class="close-btn" aria-label="Close">&times;</button>
       </div>
-
       <div class="form-group">
         <label for="poll-question">Question <span class="required">*</span></label>
         <input id="poll-question" name="question" type="text" required />
       </div>
-
       <div class="form-group">
         <label>Options <span class="required">*</span></label>
         <div id="poll-options-inputs">
-          <!-- Always start with two inputs -->
           <input name="option" type="text" class="poll-option-input" placeholder="Option 1" required />
           <input name="option" type="text" class="poll-option-input" placeholder="Option 2" required />
         </div>
-        <!-- Add up to 6 options -->
         <button type="button" id="add-option-btn">Add Option</button>
       </div>
-
       <div class="form-actions">
         <button type="submit" class="submit-btn">Create</button>
       </div>
     </form>
   </div>
-
   <script src="script.js"></script>
 </body>
 </html>
